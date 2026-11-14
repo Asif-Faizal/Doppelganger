@@ -1,0 +1,83 @@
+{
+  "benchmark": "service",
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "logical_cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "os": "Linux-6.12.113+-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "numpy": "2.5.4",
+    "faiss": "1.16.0"
+  },
+  "results": [
+    {
+      "faces": 10000,
+      "sqlite_insert_s": 0.3,
+      "sqlite_mb": 11.3,
+      "index_snapshot_mb": 5.0,
+      "cold_index_rebuild_from_sqlite_s": 0.04,
+      "warm_index_snapshot_load_s": 0.007,
+      "rss_after_load_mb": 158.7,
+      "rss_delta_mb": 18.1,
+      "faiss_omp_threads": 2,
+      "lookalike_top10": {
+        "n": 1000.0,
+        "mean_ms": 1.647,
+        "p50_ms": 1.535,
+        "p95_ms": 1.75,
+        "p99_ms": 1.908,
+        "max_ms": 28.031,
+        "qps_single_thread": 607.1
+      },
+      "same_person_top10": {
+        "n": 1000.0,
+        "mean_ms": 1.601,
+        "p50_ms": 1.522,
+        "p95_ms": 1.699,
+        "p99_ms": 2.074,
+        "max_ms": 28.057,
+        "qps_single_thread": 624.5
+      },
+      "lookalike_top10_qps_by_threads": {
+        "1": 546.2,
+        "4": 362.5,
+        "8": 232.6
+      }
+    },
+    {
+      "faces": 100000,
+      "sqlite_insert_s": 3.4,
+      "sqlite_mb": 113.0,
+      "index_snapshot_mb": 49.6,
+      "cold_index_rebuild_from_sqlite_s": 0.32,
+      "warm_index_snapshot_load_s": 0.061,
+      "rss_after_load_mb": 368.7,
+      "rss_delta_mb": 115.6,
+      "faiss_omp_threads": 2,
+      "lookalike_top10": {
+        "n": 1000.0,
+        "mean_ms": 3.476,
+        "p50_ms": 3.361,
+        "p95_ms": 3.84,
+        "p99_ms": 4.251,
+        "max_ms": 30.46,
+        "qps_single_thread": 287.7
+      },
+      "same_person_top10": {
+        "n": 1000.0,
+        "mean_ms": 3.411,
+        "p50_ms": 3.306,
+        "p95_ms": 3.479,
+        "p99_ms": 3.928,
+        "max_ms": 37.275,
+        "qps_single_thread": 293.2
+      },
+      "lookalike_top10_qps_by_threads": {
+        "1": 357.0,
+        "4": 319.6,
+        "8": 227.1
+      }
+    }
+  ]
+}

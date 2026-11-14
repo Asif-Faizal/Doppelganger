@@ -1,0 +1,162 @@
+{
+  "model_id": "sface-2021dec.yunet-2023mar.p1",
+  "dataset": "LFW_original_13233",
+  "probe_degradation": "none",
+  "quality_gate": false,
+  "metric": "cosine",
+  "protocol": {
+    "seed": 7,
+    "calibration_identities": 2874,
+    "test_identities": 2875,
+    "enrolled_fraction": 0.8,
+    "gallery_size_test": 686,
+    "mated_probes_test": 3177,
+    "non_mated_probes_test": 2772,
+    "failures_to_acquire_test": {
+      "mated": 0,
+      "non_mated": 0
+    },
+    "note": "one enrolment photo per enrolled identity; thresholds are fixed on the identity-disjoint calibration partition and only then applied to the test partition"
+  },
+  "closed_set_test": {
+    "top1": 0.987724268177526,
+    "top1_detected_only": 0.987724268177526,
+    "top5": 0.9915014164305949,
+    "top5_detected_only": 0.9915014164305949,
+    "top10": 0.9918161787850173,
+    "top10_detected_only": 0.9918161787850173
+  },
+  "open_set_operating_points_test": [
+    {
+      "target_fpir_on_calibration": 0.1,
+      "threshold": 0.40113,
+      "test_fnir": {
+        "rate": 0.015423355366698142,
+        "count": 49,
+        "of": 3177,
+        "ci95": [
+          0.0117,
+          0.0203
+        ]
+      },
+      "test_fpir": {
+        "rate": 0.1259018759018759,
+        "count": 349,
+        "of": 2772,
+        "ci95": [
+          0.1141,
+          0.1388
+        ]
+      }
+    },
+    {
+      "target_fpir_on_calibration": 0.01,
+      "threshold": 0.45521,
+      "test_fnir": {
+        "rate": 0.03336480956877558,
+        "count": 106,
+        "of": 3177,
+        "ci95": [
+          0.0277,
+          0.0402
+        ]
+      },
+      "test_fpir": {
+        "rate": 0.011904761904761904,
+        "count": 33,
+        "of": 2772,
+        "ci95": [
+          0.0085,
+          0.0167
+        ]
+      }
+    },
+    {
+      "target_fpir_on_calibration": 0.001,
+      "threshold": 0.50218,
+      "test_fnir": {
+        "rate": 0.06358199559332704,
+        "count": 202,
+        "of": 3177,
+        "ci95": [
+          0.0556,
+          0.0726
+        ]
+      },
+      "test_fpir": {
+        "rate": 0.0018037518037518038,
+        "count": 5,
+        "of": 2772,
+        "ci95": [
+          0.0008,
+          0.0042
+        ]
+      }
+    },
+    {
+      "fixed_threshold": 0.363,
+      "test_fnir": {
+        "rate": 0.013220018885741265,
+        "count": 42,
+        "of": 3177,
+        "ci95": [
+          0.0098,
+          0.0178
+        ]
+      },
+      "test_fpir": {
+        "rate": 0.40295815295815296,
+        "count": 1117,
+        "of": 2772,
+        "ci95": [
+          0.3848,
+          0.4213
+        ]
+      }
+    }
+  ],
+  "verification_test": {
+    "genuine_pairs": 169297,
+    "impostor_pairs": 1000000,
+    "auc": 0.9998189799405778,
+    "eer": 0.0011155847002604891,
+    "eer_threshold": 0.3636779432296754,
+    "tar_at_far_0.01": 0.999350254286845,
+    "threshold_at_far_0.01": 0.2983981966972351,
+    "tar_at_far_0.001": 0.998783203482637,
+    "threshold_at_far_0.001": 0.36472398042678833
+  },
+  "verification_thresholds_from_calibration": {
+    "0.01": {
+      "threshold": 0.29267,
+      "test_far": 0.011797,
+      "test_tar": 0.9993679746244765
+    },
+    "0.001": {
+      "threshold": 0.3594,
+      "test_far": 0.001224,
+      "test_tar": 0.9988836187292155
+    },
+    "0.0001": {
+      "threshold": 0.41257,
+      "test_far": 0.000134,
+      "test_tar": 0.9972651612255385
+    },
+    "1e-05": {
+      "threshold": 0.4631,
+      "test_far": 1.2e-05,
+      "test_tar": 0.9919254328192466
+    }
+  },
+  "photo_gallery_retrieval_test": {
+    "probes": 3000.0,
+    "gallery_photos": 6635.0,
+    "hit@1": 0.993,
+    "precision@1": 0.993,
+    "hit@5": 0.9963333333333333,
+    "precision@5": 0.7538000000000008,
+    "hit@10": 0.9963333333333333,
+    "precision@10": 0.623199999999997,
+    "mAP": 0.9886990777056673
+  }
+}

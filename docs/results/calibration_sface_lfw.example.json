@@ -1,0 +1,13 @@
+{
+  "model_id": "sface-2021dec.yunet-2023mar.p1",
+  "dataset": "LFW_original_13233 (identity-disjoint calibration partition, seed 7)",
+  "logistic": {
+    "a": 47.120639531580125,
+    "b": -16.4649515915404
+  },
+  "same_person_threshold": 0.41514,
+  "same_person_threshold_target_far": 0.0001,
+  "n_pairs": 1072878,
+  "prior": "class-balanced (1:1); not the prior of any real gallery",
+  "note": "Fitted on public research data. Re-run scripts/evaluate.py on photos that look like your gallery before relying on it."
+}

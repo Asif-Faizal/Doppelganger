@@ -1,0 +1,161 @@
+{
+  "benchmark": "index",
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "logical_cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "os": "Linux-6.12.113+-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "numpy": "2.5.4",
+    "faiss": "1.16.0"
+  },
+  "results": [
+    {
+      "vectors": 10000,
+      "dim": 128,
+      "faiss_omp_threads": 2,
+      "flat_build_s": 0.0,
+      "flat_rss_delta_mb": 0.6,
+      "flat_snapshot_mb": 5.0,
+      "flat_snapshot_load_s": 0.003,
+      "flat_k10": {
+        "n": 1000.0,
+        "mean_ms": 0.256,
+        "p50_ms": 0.226,
+        "p95_ms": 0.496,
+        "p99_ms": 0.629,
+        "max_ms": 0.709,
+        "qps_single_thread": 3908.6
+      },
+      "flat_k10_qps_by_threads": {
+        "1": 4625.6,
+        "4": 7434.3,
+        "8": 8339.8
+      },
+      "hnsw_not_in_production": [
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 32,
+          "build_s": 0.8,
+          "recall_at_10_vs_exact": 0.9821,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.04,
+            "p50_ms": 0.037,
+            "p95_ms": 0.055,
+            "p99_ms": 0.071,
+            "max_ms": 0.749,
+            "qps_single_thread": 24988.6
+          }
+        },
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 64,
+          "build_s": 0.8,
+          "recall_at_10_vs_exact": 0.994,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.069,
+            "p50_ms": 0.066,
+            "p95_ms": 0.083,
+            "p99_ms": 0.097,
+            "max_ms": 0.122,
+            "qps_single_thread": 14487.1
+          }
+        },
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 128,
+          "build_s": 0.8,
+          "recall_at_10_vs_exact": 0.9993,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.144,
+            "p50_ms": 0.147,
+            "p95_ms": 0.17,
+            "p99_ms": 0.185,
+            "max_ms": 0.206,
+            "qps_single_thread": 6936.2
+          }
+        }
+      ]
+    },
+    {
+      "vectors": 100000,
+      "dim": 128,
+      "faiss_omp_threads": 2,
+      "flat_build_s": 0.03,
+      "flat_rss_delta_mb": 48.9,
+      "flat_snapshot_mb": 49.6,
+      "flat_snapshot_load_s": 0.047,
+      "flat_k10": {
+        "n": 1000.0,
+        "mean_ms": 1.849,
+        "p50_ms": 1.816,
+        "p95_ms": 1.972,
+        "p99_ms": 2.358,
+        "max_ms": 4.398,
+        "qps_single_thread": 540.8
+      },
+      "flat_k10_qps_by_threads": {
+        "1": 961.4,
+        "4": 1042.4,
+        "8": 1061.3
+      },
+      "hnsw_not_in_production": [
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 32,
+          "build_s": 22.8,
+          "recall_at_10_vs_exact": 0.928,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.081,
+            "p50_ms": 0.08,
+            "p95_ms": 0.096,
+            "p99_ms": 0.109,
+            "max_ms": 0.122,
+            "qps_single_thread": 12351.9
+          }
+        },
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 64,
+          "build_s": 22.8,
+          "recall_at_10_vs_exact": 0.9525,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.14,
+            "p50_ms": 0.139,
+            "p95_ms": 0.158,
+            "p99_ms": 0.174,
+            "max_ms": 0.19,
+            "qps_single_thread": 7126.0
+          }
+        },
+        {
+          "M": 32,
+          "efConstruction": 200,
+          "efSearch": 128,
+          "build_s": 22.8,
+          "recall_at_10_vs_exact": 0.9734,
+          "latency": {
+            "n": 1000.0,
+            "mean_ms": 0.264,
+            "p50_ms": 0.26,
+            "p95_ms": 0.31,
+            "p99_ms": 0.337,
+            "max_ms": 0.41,
+            "qps_single_thread": 3787.4
+          }
+        }
+      ]
+    }
+  ]
+}
