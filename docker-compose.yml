@@ -1,0 +1,64 @@
+# Two services, one image: `api` (HTTP) and `worker` (ingestion). No database server, no queue
+# broker, no cloud dependency: SQLite and the FAISS index live on the shared `doppel-data` volume.
+#
+#   cp .env.example .env            # set DOPPEL_ADMIN_TOKEN
+#   mkdir -p models && <place the two .onnx files there, see docs/DEPLOYMENT.md>
+#   docker compose up -d --build
+#
+# Only one api container may run: the in-memory index and rate limiter are per process.
+x-doppel: &doppel
+  build: .
+  image: doppelganger:local
+  env_file: .env
+  environment:
+    DOPPEL_DATA_DIR: /data
+    DOPPEL_MODELS_DIR: /models
+    DOPPEL_HOST: 0.0.0.0
+    DOPPEL_PORT: "8000"
+    DOPPEL_IMPORT_ROOT: /photos
+    DOPPEL_EMBEDDED_WORKER: "false"
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  volumes:
+    - doppel-data:/data
+    - ./models:/models:ro
+    - ${DOPPEL_PHOTOS_DIR:-./photos}:/photos:ro
+
+services:
+  api:
+    <<: *doppel
+    command: ["python", "run.py"]
+    ports:
+      - "127.0.0.1:${DOPPEL_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  worker:
+    <<: *doppel
+    command: ["python", "-m", "app.cli", "worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.cli", "worker-health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+
+volumes:
+  doppel-data:
