@@ -49,14 +49,10 @@ async def find_similar_faces(query_embedding: np.ndarray, threshold: float = 0.6
             ORDER BY distance 
             LIMIT :limit
         """)
-        
+
         result = await session.execute(
-            query, 
-            {
-                "query_embedding": query_embedding.tolist(), 
-                "threshold": threshold,
-                "limit": limit
-            }
+            query,
+            {"query_embedding": query_embedding.tolist(), "threshold": threshold, "limit": limit},
         )
         return result.fetchall()
 ```
@@ -69,18 +65,21 @@ import redis.asyncio as redis
 import pickle
 import hashlib
 
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+redis_client = redis.Redis(host="localhost", port=6379, db=0)
+
 
 async def cache_embedding(image_hash: str, embedding: np.ndarray):
     """Cache embedding with image hash as key"""
     key = f"embedding:{image_hash}"
     await redis_client.setex(key, 3600, pickle.dumps(embedding))  # 1 hour TTL
 
+
 async def get_cached_embedding(image_hash: str) -> Optional[np.ndarray]:
     """Get cached embedding"""
     key = f"embedding:{image_hash}"
     cached = await redis_client.get(key)
     return pickle.loads(cached) if cached else None
+
 
 def get_image_hash(image_bytes: bytes) -> str:
     """Generate hash for image"""
@@ -94,19 +93,17 @@ def get_image_hash(image_bytes: bytes) -> str:
 import boto3
 from botocore.exceptions import ClientError
 
+
 class CloudStorageService:
     def __init__(self):
-        self.s3_client = boto3.client('s3')
-        self.bucket_name = 'face-recognition-images'
-    
+        self.s3_client = boto3.client("s3")
+        self.bucket_name = "face-recognition-images"
+
     async def upload_image(self, image_bytes: bytes, filename: str) -> str:
         """Upload image to S3 and return URL"""
         try:
             self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=filename,
-                Body=image_bytes,
-                ContentType='image/jpeg'
+                Bucket=self.bucket_name, Key=filename, Body=image_bytes, ContentType="image/jpeg"
             )
             return f"https://{self.bucket_name}.s3.amazonaws.com/{filename}"
         except ClientError as e:
@@ -120,7 +117,8 @@ class CloudStorageService:
 # task_queue.py (using Celery)
 from celery import Celery
 
-app = Celery('face_recognition')
+app = Celery("face_recognition")
+
 
 @app.task
 async def process_image_async(image_path: str):
@@ -129,6 +127,7 @@ async def process_image_async(image_path: str):
     # Store in database
     # Update search index
     pass
+
 
 @app.task
 async def batch_similarity_search(query_embedding: list, user_id: str):
