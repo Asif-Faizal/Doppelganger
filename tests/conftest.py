@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -54,6 +55,13 @@ def single(
     colour: tuple[int, int, int], side: int = 100, x: int = 100, y: int = 100, **kw: object
 ) -> bytes:
     return face_image([(colour, x, y, side)], **kw)  # type: ignore[arg-type]
+
+
+@pytest.fixture(autouse=True)
+def _isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A developer's DOPPEL_* variables must never leak into the tests."""
+    for key in [k for k in os.environ if k.startswith("DOPPEL_")]:
+        monkeypatch.delenv(key)
 
 
 @pytest.fixture
