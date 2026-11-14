@@ -1,249 +1,233 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from typing import List, Optional
-import os
-import uuid
-import aiofiles
-from datetime import datetime
+from __future__ import annotations
+
 import logging
+import time
+import uuid
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
+from typing import Any
 
-from .database import get_db, FaceEmbedding
-from .face_service import face_service
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from .api import legacy, v1
+from .config import Settings, get_settings
+from .container import Container, build_container
+from .errors import ApiError
+from .ml.pipeline import PipelineFactory
 
-# Create FastAPI app
-app = FastAPI(
-    title="Face Recognition API",
-    description="High-accuracy face recognition API using FaceNet",
-    version="1.0.0"
-)
+logger = logging.getLogger("doppelganger")
 
-# Allowed image extensions
-ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+API_VERSION = "2.0.0"
+SEARCH_PATHS = ("/v1/faces/search", "/search-face", "/upload-images")
 
-def allowed_file(filename: str) -> bool:
-    """Check if file extension is allowed"""
-    return '.' in filename and \
-           os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
-async def save_uploaded_file(file: UploadFile) -> str:
-    """Save uploaded file to storage directory"""
-    # Create unique filename
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join("storage", "images", unique_filename)
-    
-    # Save file
-    async with aiofiles.open(file_path, 'wb') as f:
-        content = await file.read()
-        await f.write(content)
-    
-    return file_path
+class _BodyTooLarge(Exception):
+    pass
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {"message": "Face Recognition API is running!", "version": "1.0.0"}
 
-@app.get("/health")
-async def health_check():
-    """Detailed health check"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "face_service": "ready"
-    }
+class BodySizeLimitMiddleware:
+    """Reject oversized request bodies early, including chunked uploads without Content-Length."""
 
-@app.post("/upload-images")
-async def upload_images(
-    files: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Upload 1-2 images and extract facial embeddings using FaceNet
-    
-    Returns:
-        JSON response with uploaded file information and embedding extraction results
-    """
-    if len(files) == 0 or len(files) > 2:
-        raise HTTPException(
-            status_code=400, 
-            detail="Please upload 1 or 2 images"
-        )
-    
-    results = []
-    
-    for file in files:
-        # Validate file
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No filename provided")
-        
-        if not allowed_file(file.filename):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File type not allowed. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"
-            )
-        
+    def __init__(self, app: ASGIApp, settings: Settings) -> None:
+        self.app = app
+        self.settings = settings
+
+    def _limit(self, path: str) -> int:
+        s = self.settings
+        if path in SEARCH_PATHS:
+            return s.max_upload_bytes * 2 + 1024 * 1024
+        return s.max_request_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        limit = self._limit(scope["path"])
+        declared = dict(scope["headers"]).get(b"content-length")
+        if declared is not None and declared.isdigit() and int(declared) > limit:
+            await self._reject(scope, receive, send, limit)
+            return
+        received = 0
+        started = False
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    raise _BodyTooLarge
+            return message
+
+        async def tracking_send(message: Message) -> None:
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
         try:
-            # Read file content
-            file_content = await file.read()
-            
-            # Extract face embedding
-            embedding = face_service.extract_face_embedding(file_content)
-            
-            if embedding is None:
-                results.append({
-                    "filename": file.filename,
-                    "status": "error",
-                    "message": "No face detected in image"
-                })
-                continue
-            
-            # Save file
-            await file.seek(0)  # Reset file pointer
-            file_path = await save_uploaded_file(file)
-            
-            # Store in database
-            db_embedding = FaceEmbedding(image_path=file_path)
-            db_embedding.set_embedding(embedding)
-            
-            db.add(db_embedding)
-            db.commit()
-            db.refresh(db_embedding)
-            
-            results.append({
-                "filename": file.filename,
-                "status": "success",
-                "image_path": file_path,
-                "embedding_id": db_embedding.id,
-                "embedding_shape": embedding.shape,
-                "created_at": db_embedding.created_at.isoformat()
-            })
-            
-            logger.info(f"Successfully processed {file.filename}")
-            
-        except Exception as e:
-            logger.error(f"Error processing {file.filename}: {str(e)}")
-            results.append({
-                "filename": file.filename,
-                "status": "error",
-                "message": f"Processing failed: {str(e)}"
-            })
-    
-    return {
-        "message": f"Processed {len(files)} images",
-        "results": results
-    }
+            await self.app(scope, limited_receive, tracking_send)
+        except _BodyTooLarge:
+            if not started:
+                await self._reject(scope, receive, send, limit)
 
-@app.post("/search-face")
-async def search_face(
-    file: UploadFile = File(...),
-    threshold: float = Form(0.6),
-    max_results: int = Form(10),
-    db: Session = Depends(get_db)
-):
-    """
-    Search for matching faces using Euclidean distance comparison (face_recognition standard)
-    
-    Args:
-        file: Image file to search for
-        threshold: Maximum distance for a match (default: 0.6, lower = more strict)
-        max_results: Maximum number of results to return (default: 10)
-    
-    Returns:
-        JSON response with matching images and their distance scores
-    """
-    # Validate file
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided")
-    
-    if not allowed_file(file.filename):
-        raise HTTPException(
-            status_code=400, 
-            detail=f"File type not allowed. Supported types: {', '.join(ALLOWED_EXTENSIONS)}"
+    @staticmethod
+    async def _reject(scope: Scope, receive: Receive, send: Send, limit: int) -> None:
+        body = JSONResponse(
+            status_code=413,
+            content={
+                "detail": "Request body too large.",
+                "error": {
+                    "code": "request_too_large",
+                    "message": "Request body too large.",
+                    "details": {"max_bytes": limit},
+                },
+            },
         )
-    
-    try:
-        # Extract face embedding from uploaded image
-        file_content = await file.read()
-        query_embedding = face_service.extract_face_embedding(file_content)
-        
-        if query_embedding is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No face detected in the uploaded image"
-            )
-        
-        # Get all stored embeddings
-        stored_embeddings_db = db.query(FaceEmbedding).all()
-        
-        if not stored_embeddings_db:
-            return {
-                "message": "No faces in database to search against",
-                "matches": []
+        await body(scope, receive, send)
+
+
+def _error_json(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    rid = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=status,
+        content={
+            "detail": message,
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details or {},
+                "request_id": rid,
+            },
+        },
+        headers=headers,
+    )
+
+
+def create_app(
+    settings: Settings | None = None, pipeline_factory: PipelineFactory | None = None
+) -> FastAPI:
+    settings = settings or get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+    for noisy in ("alembic", "httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        container: Container = build_container(settings, pipeline_factory)
+        app.state.container = container
+        if settings.embedded_worker and container.worker is not None:
+            container.worker.start()
+        logger.info("Doppelganger %s started", API_VERSION)
+        try:
+            yield
+        finally:
+            container.close()
+
+    app = FastAPI(
+        title="Doppelganger Face Matching API",
+        description=(
+            "Self-hosted private-gallery face search. **LOOKALIKE** ranks visually similar faces "
+            "(not identity). **SAME_PERSON** returns threshold-passing candidates (not proof of "
+            "identity). All processing and storage is local."
+        ),
+        version=API_VERSION,
+        lifespan=lifespan,
+    )
+
+    if settings.cors_origin_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origin_list,
+            allow_methods=["GET", "POST", "DELETE"],
+            allow_headers=["Authorization", "Content-Type"],
+            allow_credentials=False,
+        )
+    app.add_middleware(BodySizeLimitMiddleware, settings=settings)
+
+    @app.middleware("http")
+    async def request_context(request: Request, call_next: Any) -> Any:
+        rid = request.headers.get("x-request-id", "")
+        request.state.request_id = rid if rid.isalnum() and len(rid) <= 64 else uuid.uuid4().hex
+        t0 = time.perf_counter()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers.setdefault("Cache-Control", "no-store")
+        logger.info(
+            "%s %s -> %d (%.1f ms) rid=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            (time.perf_counter() - t0) * 1000,
+            request.state.request_id,
+        )
+        return response
+
+    @app.exception_handler(ApiError)
+    async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+        status = exc.status_code
+        if request.url.path in legacy.LEGACY_PATHS and status == 422:
+            status = 400  # original API reported invalid-image problems as 400
+        return _error_json(request, status, exc.code, exc.message, exc.details, exc.headers)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        fields = [
+            {
+                "field": ".".join(str(p) for p in e.get("loc", ()) if p != "body"),
+                "problem": e.get("msg", "invalid"),
             }
-        
-        # Convert to format needed for matching
-        stored_embeddings = [
-            (embedding_db.image_path, embedding_db.get_embedding())
-            for embedding_db in stored_embeddings_db
+            for e in exc.errors()
         ]
-        
-        # Find matches
-        matches = face_service.find_matches(
-            query_embedding, 
-            stored_embeddings, 
-            threshold=threshold
-        )
-        
-        # Limit results
-        matches = matches[:max_results]
-        
-        # Format response
-        match_results = []
-        for image_path, distance in matches:
-            # Convert distance to similarity score for display
-            similarity_score = max(0.0, 1.0 - (distance / 0.6))
-            
-            match_results.append({
-                "image_path": image_path,
-                "distance": round(distance, 4),
-                "similarity_score": round(similarity_score, 4),
-                "confidence": "high" if distance < 0.4 else "medium" if distance < 0.6 else "low"
-            })
-        
-        return {
-            "message": f"Found {len(match_results)} matches",
-            "query_filename": file.filename,
-            "threshold": threshold,
-            "total_faces_searched": len(stored_embeddings_db),
-            "matches": match_results
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error during face search: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Face search failed: {str(e)}"
+        return _error_json(
+            request, 422, "validation_error", "The request is invalid.", {"fields": fields}
         )
 
-@app.get("/stats")
-async def get_stats(db: Session = Depends(get_db)):
-    """Get database statistics"""
-    total_faces = db.query(FaceEmbedding).count()
-    
-    return {
-        "total_faces_stored": total_faces,
-        "storage_path": "storage/images/",
-        "database_path": "storage/embeddings.db"
-    }
+    @app.exception_handler(StarletteHTTPException)
+    async def http_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        code = {404: "not_found", 405: "method_not_allowed"}.get(exc.status_code, "http_error")
+        return _error_json(request, exc.status_code, code, str(exc.detail), None, exc.headers)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    @app.exception_handler(Exception)
+    async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.error(
+            "Unhandled error (%s) rid=%s",
+            type(exc).__name__,
+            getattr(request.state, "request_id", "-"),
+        )
+        return _error_json(request, 500, "internal_error", "An internal error occurred.")
+
+    app.include_router(legacy.router)
+    app.include_router(v1.router)
+    return app
+
+
+_app: FastAPI | None = None
+
+
+def __getattr__(name: str) -> FastAPI:
+    """Lazy module-level ``app`` so `uvicorn app.main:app` needs no import-time side effects."""
+    global _app
+    if name == "app":
+        if _app is None:
+            _app = create_app()
+        return _app
+    raise AttributeError(name)

@@ -1,0 +1,69 @@
+{
+  "ready": "ready",
+  "index": {
+    "status": "ok",
+    "model_id": "sface-2021dec.yunet-2023mar.p1",
+    "loaded": true,
+    "vectors": 15054,
+    "last_face_seq": 15054,
+    "last_event_id": 0,
+    "snapshot_age_s": null,
+    "rebuilt_on_load": false
+  },
+  "runs": [
+    {
+      "mode": "LOOKALIKE",
+      "concurrency": 1,
+      "requests": 300,
+      "status_codes": {
+        "200": 279,
+        "422": 21
+      },
+      "throughput_rps": 28.9,
+      "latency": {
+        "n": 300.0,
+        "mean_ms": 34.53,
+        "p50_ms": 35.68,
+        "p95_ms": 39.84,
+        "p99_ms": 48.43,
+        "max_ms": 105.04
+      }
+    },
+    {
+      "mode": "LOOKALIKE",
+      "concurrency": 2,
+      "requests": 300,
+      "status_codes": {
+        "200": 279,
+        "422": 21
+      },
+      "throughput_rps": 61.2,
+      "latency": {
+        "n": 300.0,
+        "mean_ms": 32.56,
+        "p50_ms": 33.87,
+        "p95_ms": 38.65,
+        "p99_ms": 42.01,
+        "max_ms": 45.22
+      }
+    },
+    {
+      "mode": "LOOKALIKE",
+      "concurrency": 4,
+      "requests": 300,
+      "status_codes": {
+        "200": 279,
+        "422": 21
+      },
+      "throughput_rps": 76.1,
+      "latency": {
+        "n": 300.0,
+        "mean_ms": 52.41,
+        "p50_ms": 53.97,
+        "p95_ms": 61.65,
+        "p99_ms": 100.4,
+        "max_ms": 108.11
+      }
+    }
+  ]
+}
