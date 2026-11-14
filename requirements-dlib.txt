@@ -1,0 +1,7 @@
+# OPTIONAL, evaluation/migration only: the original dlib baseline.
+# Needs cmake + a C++ toolchain (build-essential, libstdc++-dev). Not installed in the Docker image.
+-r requirements.txt
+dlib==19.24.6
+face_recognition==1.3.0
+face_recognition_models==0.3.0
+setuptools<81
