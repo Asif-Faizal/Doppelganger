@@ -174,9 +174,9 @@ def pair_scores(
         by_id.setdefault(labels[i], []).append(i)
     gen_pairs: list[tuple[int, int]] = []
     for members in by_id.values():
-        for a in range(len(members)):
-            for b in range(a + 1, len(members)):
-                gen_pairs.append((members[a], members[b]))
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                gen_pairs.append((members[i], members[j]))
     if len(gen_pairs) > max_genuine:
         sel = rng.choice(len(gen_pairs), max_genuine, replace=False)
         gen_pairs = [gen_pairs[int(s)] for s in sel]

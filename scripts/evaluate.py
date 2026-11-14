@@ -115,16 +115,16 @@ def _init_worker(
         from app.ml.opencv_models import build_sface_pipeline_parts
         from app.ml.pipeline import FacePipeline
 
-        settings = Settings(models_dir=Path(models_dir), _env_file=None)  # type: ignore[call-arg]
-        det, emb, info = build_sface_pipeline_parts(
+        settings = Settings(models_dir=Path(models_dir), _env_file=None)
+        yunet, sface, info = build_sface_pipeline_parts(
             Path(models_dir), max_side=settings.detect_max_side, threads=threads
         )
-        _STATE["pipe"] = FacePipeline(det, emb, info, settings)
+        _STATE["pipe"] = FacePipeline(yunet, sface, info, settings)
     else:
         from app.ml.dlib_adapter import build_dlib_pipeline_parts
 
-        det, emb, info = build_dlib_pipeline_parts()
-        _STATE["det"], _STATE["emb"], _STATE["info"] = det, emb, info
+        hog, resnet, dlib_info = build_dlib_pipeline_parts()
+        _STATE["det"], _STATE["emb"], _STATE["info"] = hog, resnet, dlib_info
 
 
 def _choose(faces: list[Any], shape: tuple[int, ...], select: str) -> Any:
@@ -322,6 +322,9 @@ def cmd_identify(a: argparse.Namespace) -> int:
         "probe_degradation": p["meta"]["degrade"],
         "quality_gate": g["meta"]["quality_gate"],
         "metric": metric,
+        "threshold_units": "cosine similarity (higher = more similar)"
+        if metric == "cosine"
+        else "euclidean distance (lower = more similar)",
         "protocol": {
             "seed": a.seed,
             "calibration_identities": len(cal_ids),
@@ -344,6 +347,10 @@ def cmd_identify(a: argparse.Namespace) -> int:
 
     total_m = len(ms_t) + test_split.mated_fta
 
+    def native(t: float) -> float:
+        """Threshold in the model's own unit: cosine similarity, or euclidean distance for l2."""
+        return round(t if metric == "cosine" else -t, 5)
+
     def point(t: float) -> tuple[Any, Any]:
         fnir, fpir = evalkit.fnir_fpir(ms_t, ok_t, ns_t, np.array([t]), test_split.mated_fta)
         return (
@@ -358,14 +365,15 @@ def cmd_identify(a: argparse.Namespace) -> int:
         operating.append(
             {
                 "target_fpir_on_calibration": target,
-                "threshold": round(t, 5),
+                "threshold": native(t),
                 "test_fnir": fnir_r,
                 "test_fpir": fpir_r,
             }
         )
-    for t in a.fixed_thresholds:
+    fixed = a.fixed_thresholds if metric == "cosine" else [-d for d in a.fixed_distances]
+    for t in fixed:
         fnir_r, fpir_r = point(t)
-        operating.append({"fixed_threshold": t, "test_fnir": fnir_r, "test_fpir": fpir_r})
+        operating.append({"fixed_threshold": native(t), "test_fnir": fnir_r, "test_fpir": fpir_r})
     report["open_set_operating_points_test"] = operating
 
     gen_c, imp_c = evalkit.pair_scores(
@@ -385,7 +393,7 @@ def cmd_identify(a: argparse.Namespace) -> int:
         if len(imp_c) * far >= 1:
             t = float(np.quantile(imp_c, 1 - far))
             far_table[f"{far:g}"] = {
-                "threshold": round(t, 5),
+                "threshold": native(t),
                 "test_far": float((imp_t >= t).mean()),
                 "test_tar": float((gen_t >= t).mean()),
             }
@@ -542,7 +550,20 @@ def main() -> int:
         help="share of identities used for calibration; 0.5 keeps the calibration gallery the "
         "same size as the test gallery (FPIR grows with gallery size)",
     )
-    i.add_argument("--fixed-thresholds", type=float, nargs="*", default=[0.363])
+    i.add_argument(
+        "--fixed-thresholds",
+        type=float,
+        nargs="*",
+        default=[0.363],
+        help="cosine models: extra thresholds to report (vendor SFace default 0.363)",
+    )
+    i.add_argument(
+        "--fixed-distances",
+        type=float,
+        nargs="*",
+        default=[0.6],
+        help="euclidean (dlib) models: extra distance thresholds to report (dlib default 0.6)",
+    )
     i.add_argument("--enrolled-fraction", type=float, default=0.8)
     i.add_argument("--target-fpir", type=float, nargs="+", default=[0.1, 0.01, 0.001])
     i.add_argument("--impostor-pairs", type=int, default=1_000_000)

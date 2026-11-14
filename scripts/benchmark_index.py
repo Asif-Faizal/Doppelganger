@@ -91,7 +91,7 @@ def queries_for(vecs: np.ndarray, count: int, seed: int = 1) -> np.ndarray:
     pick = rng.integers(len(vecs), size=count)
     q = vecs[pick] + rng.standard_normal((count, DIM)).astype(np.float32) * (0.5 / np.sqrt(DIM))
     q /= np.linalg.norm(q, axis=1, keepdims=True)
-    return q.astype(np.float32)
+    return np.asarray(q, dtype=np.float32)
 
 
 def time_single(
@@ -289,7 +289,7 @@ def bench_service(a: argparse.Namespace) -> dict[str, Any]:
     for n in a.sizes:
         work = Path(tempfile.mkdtemp(prefix="doppel-bench-", dir=a.workdir))
         try:
-            settings = Settings(data_dir=work, pipeline="fake", _env_file=None)  # type: ignore[call-arg]
+            settings = Settings(data_dir=work, pipeline="fake", _env_file=None)
             settings.ensure_dirs()
             migrate.upgrade(settings.database_url or "")
             db = Database(settings.database_url or "")
@@ -377,12 +377,12 @@ def bench_inference(a: argparse.Namespace) -> dict[str, Any]:
     rng = np.random.default_rng(0)
     if len(paths) > a.count:
         paths = [paths[int(i)] for i in sorted(rng.choice(len(paths), a.count, replace=False))]
-    images = [cv2.imread(str(p)) for p in paths]
-    images = [im for im in images if im is not None]
+    loaded = (cv2.imread(str(p)) for p in paths)
+    images: list[np.ndarray] = [im for im in loaded if im is not None]
     out: list[dict[str, Any]] = []
     for threads in a.threads:
         cv2.setNumThreads(threads)
-        settings = Settings(models_dir=Path(a.models_dir), _env_file=None)  # type: ignore[call-arg]
+        settings = Settings(models_dir=Path(a.models_dir), _env_file=None)
         det, emb, info = build_sface_pipeline_parts(
             Path(a.models_dir), max_side=settings.detect_max_side, threads=threads
         )
